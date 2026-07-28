@@ -1,0 +1,27 @@
+# ============================================================
+# ActivityLens – Configuration
+# ============================================================
+
+capture:
+  polling_interval_seconds: 5        # How often to poll the active window
+  idle_threshold_seconds: 300        # 5 min — used by Day 2 sessionizer
+
+privacy:
+  # Apps/titles that are NEVER captured. Supports:
+  #   - Exact process names (case-insensitive): "1Password.exe"
+  #   - Glob patterns on window titles: "*bank*", "*health*"
+  blocklist:
+    process_names:
+      - "1Password.exe"
+      - "KeePass.exe"
+      - "Bitwarden.exe"
+    title_patterns:
+      - "*bank*"
+      - "*health*"
+      - "*medical*"
+      - "*password*"
+
+  retention_days: 30                 # Auto-delete raw snapshots older than this
+
+storage:
+  db_path: "data/activity.db"        # Relative to project root

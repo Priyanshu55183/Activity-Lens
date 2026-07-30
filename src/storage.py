@@ -53,6 +53,29 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp
 ON snapshots(timestamp);
 """
 
+# --- Sessions table (Day 2) ---
+
+_CREATE_SESSIONS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS sessions (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    start_time       TEXT    NOT NULL,
+    end_time         TEXT    NOT NULL,
+    duration_seconds REAL    NOT NULL,
+    process_name     TEXT    NOT NULL,
+    window_title     TEXT,
+    is_browser       INTEGER DEFAULT 0,
+    page_title       TEXT,
+    snapshot_count   INTEGER DEFAULT 1,
+    category         TEXT    DEFAULT 'neutral',
+    created_at       TEXT    DEFAULT (datetime('now'))
+);
+"""
+
+_CREATE_SESSIONS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_sessions_start_time
+ON sessions(start_time);
+"""
+
 
 # ---------------------------------------------------------------------------
 # Database Initialization
@@ -82,6 +105,8 @@ def init_db(db_path: str | Path) -> sqlite3.Connection:
     
     conn.execute(_CREATE_TABLE_SQL)
     conn.execute(_CREATE_INDEX_SQL)
+    conn.execute(_CREATE_SESSIONS_TABLE_SQL)
+    conn.execute(_CREATE_SESSIONS_INDEX_SQL)
     conn.commit()
 
     return conn
@@ -175,6 +200,30 @@ def get_recent_snapshots(
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
+def get_snapshots_for_date(
+    conn: sqlite3.Connection,
+    date_str: str,
+) -> list[dict]:
+    """
+    Fetch all snapshots for a given date (YYYY-MM-DD format).
+    
+    Used by the Day 2 pipeline to sessionize a full day's data.
+    The date is matched against the first 10 characters of the ISO timestamp.
+    """
+    cursor = conn.execute(
+        """
+        SELECT id, timestamp, process_name, window_title, is_browser, page_title
+        FROM snapshots
+        WHERE substr(timestamp, 1, 10) = ?
+        ORDER BY timestamp ASC
+        """,
+        (date_str,),
+    )
+
+    columns = ["id", "timestamp", "process_name", "window_title", "is_browser", "page_title"]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
 def get_snapshot_stats(conn: sqlite3.Connection) -> list[dict]:
     """
     Return aggregate stats: count of snapshots per process, ordered by count.
@@ -193,3 +242,115 @@ def get_snapshot_stats(conn: sqlite3.Connection) -> list[dict]:
 
     columns = ["process_name", "count", "first_seen", "last_seen"]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Sessions — Insert & Query  (Day 2)
+# ---------------------------------------------------------------------------
+
+def insert_sessions(conn: sqlite3.Connection, sessions: list[dict]) -> int:
+    """
+    Bulk-insert a list of classified session dicts.
+    
+    Returns the number of rows inserted.
+    
+    Each session dict is expected to have keys matching the sessions table
+    columns (produced by the pipeline: sessionizer + classifier).
+    """
+    if not sessions:
+        return 0
+
+    cursor = conn.executemany(
+        """
+        INSERT INTO sessions
+            (start_time, end_time, duration_seconds, process_name,
+             window_title, is_browser, page_title, snapshot_count, category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                s["start_time"],
+                s["end_time"],
+                s["duration_seconds"],
+                s["process_name"],
+                s.get("window_title"),
+                1 if s.get("is_browser") else 0,
+                s.get("page_title"),
+                s.get("snapshot_count", 1),
+                s.get("category", "neutral"),
+            )
+            for s in sessions
+        ],
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
+def get_sessions_for_date(
+    conn: sqlite3.Connection,
+    date_str: str,
+) -> list[dict]:
+    """
+    Fetch all sessions for a given date (YYYY-MM-DD format).
+    Ordered by start_time ascending.
+    """
+    cursor = conn.execute(
+        """
+        SELECT id, start_time, end_time, duration_seconds, process_name,
+               window_title, is_browser, page_title, snapshot_count, category
+        FROM sessions
+        WHERE substr(start_time, 1, 10) = ?
+        ORDER BY start_time ASC
+        """,
+        (date_str,),
+    )
+
+    columns = [
+        "id", "start_time", "end_time", "duration_seconds", "process_name",
+        "window_title", "is_browser", "page_title", "snapshot_count", "category",
+    ]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def get_daily_summary(
+    conn: sqlite3.Connection,
+    date_str: str,
+) -> dict:
+    """
+    Return aggregate stats for a given date, grouped by category.
+    
+    Returns:
+        {
+            "total_seconds": float,
+            "by_category": {
+                "productive": {"seconds": float, "session_count": int},
+                "neutral":    {"seconds": float, "session_count": int},
+                "distracting": {"seconds": float, "session_count": int},
+                "idle":       {"seconds": float, "session_count": int},
+            }
+        }
+    """
+    cursor = conn.execute(
+        """
+        SELECT category,
+               COALESCE(SUM(duration_seconds), 0) as total_seconds,
+               COUNT(*) as session_count
+        FROM sessions
+        WHERE substr(start_time, 1, 10) = ?
+        GROUP BY category
+        """,
+        (date_str,),
+    )
+
+    by_category = {}
+    total_seconds = 0.0
+
+    for row in cursor.fetchall():
+        cat, secs, count = row
+        by_category[cat] = {"seconds": secs, "session_count": count}
+        total_seconds += secs
+
+    return {
+        "total_seconds": total_seconds,
+        "by_category": by_category,
+    }

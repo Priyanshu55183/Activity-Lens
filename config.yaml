@@ -23,5 +23,31 @@ privacy:
 
   retention_days: 30                 # Auto-delete raw snapshots older than this
 
+classification:
+  productive:
+    processes:
+      - "Code.exe"
+      - "devenv.exe"
+      - "WindowsTerminal.exe"
+      - "cmd.exe"
+      - "powershell.exe"
+    browser_titles:
+      - "*stackoverflow*"
+      - "*stack overflow*"
+      - "*github*"
+      - "*docs.*"
+      - "*documentation*"
+      - "*api*"
+  distracting:
+    processes: []
+    browser_titles:
+      - "*youtube*"
+      - "*reddit*"
+      - "*twitter*"
+      - "*x.com*"
+      - "*instagram*"
+      - "*facebook*"
+      - "*tiktok*"
+
 storage:
   db_path: "data/activity.db"        # Relative to project root

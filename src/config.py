@@ -34,6 +34,16 @@ DEFAULTS = {
         },
         "retention_days": 30,
     },
+    "classification": {
+        "productive": {
+            "processes": [],
+            "browser_titles": [],
+        },
+        "distracting": {
+            "processes": [],
+            "browser_titles": [],
+        },
+    },
     "storage": {
         "db_path": "data/activity.db",
     },
@@ -112,6 +122,30 @@ class Config:
     @property
     def retention_days(self) -> int:
         return self._data["privacy"]["retention_days"]
+
+    @property
+    def classification_rules(self) -> dict:
+        """
+        Return classification rules as a dict the classifier module expects.
+        
+        Structure:
+            {
+                "productive": {"processes": [...], "browser_titles": [...]},
+                "distracting": {"processes": [...], "browser_titles": [...]},
+            }
+        All patterns are lowercased for case-insensitive matching.
+        """
+        raw = self._data["classification"]
+        return {
+            "productive": {
+                "processes": [p.lower() for p in raw["productive"]["processes"]],
+                "browser_titles": [p.lower() for p in raw["productive"]["browser_titles"]],
+            },
+            "distracting": {
+                "processes": [p.lower() for p in raw["distracting"]["processes"]],
+                "browser_titles": [p.lower() for p in raw["distracting"]["browser_titles"]],
+            },
+        }
 
     @property
     def db_path(self) -> Path:

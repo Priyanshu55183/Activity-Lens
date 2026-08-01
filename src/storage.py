@@ -354,3 +354,66 @@ def get_daily_summary(
         "total_seconds": total_seconds,
         "by_category": by_category,
     }
+
+
+# ---------------------------------------------------------------------------
+# Weekly Analytics (Day 4)
+# ---------------------------------------------------------------------------
+
+def get_weekly_summary(
+    conn: sqlite3.Connection,
+    end_date_str: str,
+) -> list[dict]:
+    """
+    Return 7 days of daily summaries ending on end_date_str (inclusive).
+    
+    Each entry contains:
+        {
+            "date": "2026-07-30",
+            "total_seconds": float,
+            "by_category": { ... }
+        }
+    
+    Days with no data will have total_seconds=0 and empty by_category.
+    """
+    from datetime import date as date_type
+
+    end_date = date_type.fromisoformat(end_date_str)
+    days = []
+
+    for i in range(6, -1, -1):  # 6 days ago → today
+        day = end_date - timedelta(days=i)
+        day_str = day.isoformat()
+        summary = get_daily_summary(conn, day_str)
+        summary["date"] = day_str
+        days.append(summary)
+
+    return days
+
+
+def get_date_range_sessions(
+    conn: sqlite3.Connection,
+    start_date_str: str,
+    end_date_str: str,
+) -> list[dict]:
+    """
+    Fetch all sessions between start_date and end_date (inclusive).
+    Ordered by start_time ascending.
+    """
+    cursor = conn.execute(
+        """
+        SELECT id, start_time, end_time, duration_seconds, process_name,
+               window_title, is_browser, page_title, snapshot_count, category
+        FROM sessions
+        WHERE substr(start_time, 1, 10) >= ? AND substr(start_time, 1, 10) <= ?
+        ORDER BY start_time ASC
+        """,
+        (start_date_str, end_date_str),
+    )
+
+    columns = [
+        "id", "start_time", "end_time", "duration_seconds", "process_name",
+        "window_title", "is_browser", "page_title", "snapshot_count", "category",
+    ]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+

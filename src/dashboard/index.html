@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ActivityLens - Your personal productivity dashboard. Track and visualize your daily computer activity.">
+    <title>ActivityLens - Productivity Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+        /* =====================================================
+           DESIGN SYSTEM
+           ===================================================== */
+        :root {
+            /* Colors */
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d2e;
+            --bg-card: rgba(26, 29, 46, 0.7);
+            --bg-card-hover: rgba(35, 39, 60, 0.8);
+            --border: rgba(255, 255, 255, 0.06);
+            --border-hover: rgba(255, 255, 255, 0.12);
+
+            --text-primary: #e8eaf0;
+            --text-secondary: #8b8fa3;
+            --text-muted: #5c5f73;
+
+            /* Category colors */
+            --productive: #34d399;
+            --productive-bg: rgba(52, 211, 153, 0.12);
+            --productive-glow: rgba(52, 211, 153, 0.3);
+            --neutral: #fbbf24;
+            --neutral-bg: rgba(251, 191, 36, 0.12);
+            --neutral-glow: rgba(251, 191, 36, 0.3);
+            --distracting: #f87171;
+            --distracting-bg: rgba(248, 113, 113, 0.12);
+            --distracting-glow: rgba(248, 113, 113, 0.3);
+            --idle: #475569;
+            --idle-bg: rgba(71, 85, 105, 0.12);
+
+            /* Accent */
+            --accent: #818cf8;
+            --accent-bg: rgba(129, 140, 248, 0.12);
+
+            /* Sizing */
+            --radius: 16px;
+            --radius-sm: 10px;
+            --radius-xs: 6px;
+        }
+
+        /* =====================================================
+           RESET & BASE
+           ===================================================== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Ambient background glow */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 30% 20%, rgba(129, 140, 248, 0.04) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 80%, rgba(52, 211, 153, 0.03) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* =====================================================
+           LAYOUT
+           ===================================================== */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* =====================================================
+           HEADER
+           ===================================================== */
+        .header {
+            padding: 24px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 32px;
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), var(--productive));
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .logo h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .logo span {
+            color: var(--text-muted);
+            font-weight: 400;
+            font-size: 13px;
+            margin-left: 8px;
+        }
+
+        /* Date navigation */
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-nav button {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-xs);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .date-nav button:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-hover);
+            color: var(--text-primary);
+        }
+
+        .date-nav .date-display {
+            font-size: 15px;
+            font-weight: 600;
+            min-width: 140px;
+            text-align: center;
+            cursor: pointer;
+            padding: 6px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xs);
+            transition: all 0.2s;
+        }
+
+        .date-nav .date-display:hover {
+            border-color: var(--accent);
+        }
+
+        .date-input {
+            display: none;
+        }
+
+        /* Tab navigation */
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 4px;
+        }
+
+        .tab-btn {
+            padding: 8px 20px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: var(--radius-xs);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        /* =====================================================
+           CARDS
+           ===================================================== */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+
+        /* =====================================================
+           STAT CARDS ROW
+           ===================================================== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 20px 16px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            line-height: 1.1;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* =====================================================
+           CHARTS GRID
+           ===================================================== */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .donut-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .donut-center .donut-value {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
+
+        .donut-center .donut-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* =====================================================
+           TIMELINE BAR
+           ===================================================== */
+        .timeline-bar-container {
+            margin-bottom: 24px;
+        }
+
+        .timeline-bar {
+            display: flex;
+            height: 32px;
+            border-radius: var(--radius-xs);
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .timeline-segment {
+            height: 100%;
+            position: relative;
+            min-width: 2px;
+            transition: opacity 0.2s;
+            cursor: pointer;
+        }
+
+        .timeline-segment:hover {
+            opacity: 0.8;
+        }
+
+        .timeline-segment.productive { background: var(--productive); }
+        .timeline-segment.neutral { background: var(--neutral); }
+        .timeline-segment.distracting { background: var(--distracting); }
+        .timeline-segment.idle { background: var(--idle); }
+
+        .timeline-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .timeline-tooltip {
+            position: fixed;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-hover);
+            border-radius: var(--radius-xs);
+            padding: 8px 12px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 100;
+            display: none;
+            max-width: 300px;
+        }
+
+        /* =====================================================
+           SESSION LIST
+           ===================================================== */
+        .session-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .session-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .session-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .session-list::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .session-item {
+            display: grid;
+            grid-template-columns: 100px 1fr 80px 90px;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: var(--radius-xs);
+            transition: background 0.2s;
+            font-size: 13px;
+        }
+
+        .session-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .session-time {
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+            font-size: 12px;
+        }
+
+        .session-app {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .session-app-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .session-app-detail {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .session-duration {
+            text-align: right;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .category-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 20px;
+            text-align: center;
+            text-transform: capitalize;
+        }
+
+        .category-badge.productive {
+            background: var(--productive-bg);
+            color: var(--productive);
+        }
+        .category-badge.neutral {
+            background: var(--neutral-bg);
+            color: var(--neutral);
+        }
+        .category-badge.distracting {
+            background: var(--distracting-bg);
+            color: var(--distracting);
+        }
+        .category-badge.idle {
+            background: var(--idle-bg);
+            color: var(--idle);
+        }
+
+        /* =====================================================
+           LEGEND
+           ===================================================== */
+        .legend {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* =====================================================
+           WEEKLY VIEW
+           ===================================================== */
+        .view-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .view-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .weekly-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .streak-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--productive-bg);
+            border: 1px solid rgba(52, 211, 153, 0.2);
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--productive);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 var(--productive-glow); }
+            50% { box-shadow: 0 0 0 8px transparent; }
+        }
+
+        .streak-badge .streak-fire {
+            font-size: 18px;
+        }
+
+        .weekly-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .weekly-chart-container {
+            height: 280px;
+        }
+
+        .weekly-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .weekly-stat-card {
+            text-align: center;
+            padding: 16px;
+        }
+
+        .trend-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+
+        .trend-indicator.up {
+            color: var(--productive);
+            background: var(--productive-bg);
+        }
+
+        .trend-indicator.down {
+            color: var(--distracting);
+            background: var(--distracting-bg);
+        }
+
+        .trend-indicator.flat {
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* =====================================================
+           EMPTY STATE
+           ===================================================== */
+        .empty-state {
+            text-align: center;
+            padding: 80px 24px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .empty-state code {
+            background: var(--bg-card);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        /* =====================================================
+           LOADING STATE
+           ===================================================== */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 17, 23, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* =====================================================
+           RESPONSIVE
+           ===================================================== */
+        @media (max-width: 768px) {
+            .charts-grid, .weekly-grid {
+                grid-template-columns: 1fr;
+            }
+            .header-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .session-item {
+                grid-template-columns: 80px 1fr 70px;
+            }
+            .session-item .category-badge {
+                display: none;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* =====================================================
+           FOOTER
+           ===================================================== */
+        .footer {
+            text-align: center;
+            padding: 32px 0;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+            margin-top: 48px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Tooltip for timeline -->
+    <div class="timeline-tooltip" id="timeline-tooltip"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-inner">
+                <div class="logo">
+                    <div class="logo-icon">&#x1F50D;</div>
+                    <h1>ActivityLens <span>Dashboard</span></h1>
+                </div>
+
+                <div class="date-nav">
+                    <button id="prev-day" title="Previous day">&#x25C0;</button>
+                    <div class="date-display" id="date-display" title="Click to pick date"></div>
+                    <input type="date" class="date-input" id="date-input">
+                    <button id="next-day" title="Next day">&#x25B6;</button>
+                </div>
+
+                <div class="tab-nav">
+                    <button class="tab-btn active" data-tab="daily">Daily</button>
+                    <button class="tab-btn" data-tab="weekly">Weekly</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- =================== DAILY VIEW =================== -->
+        <div class="view-content active" id="daily-view">
+            <!-- Stats row -->
+            <div class="stats-grid" id="stats-grid">
+                <div class="card stat-card">
+                    <div class="stat-value" id="stat-total">--</div>
+                    <div class="stat-label">Total Time</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-value" id="stat-productive" style="color: var(--productive)">--</div>
+                    <div class="stat-label">Productive</div>
+                    <div class="stat-sub" id="stat-productive-pct"></div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-value" id="stat-sessions">--</div>
+                    <div class="stat-label">Sessions</div>
+                </div>
+                <div class="card stat-card" id="streak-stat-card">
+                    <div class="stat-value" id="stat-streak" style="color: var(--accent)">--</div>
+                    <div class="stat-label">Day Streak</div>
+                    <div class="stat-sub">&gt;50% productive</div>
+                </div>
+            </div>
+
+            <!-- Timeline bar -->
+            <div class="card timeline-bar-container">
+                <div class="card-title">Activity Timeline</div>
+                <div class="timeline-bar" id="timeline-bar"></div>
+                <div class="timeline-labels" id="timeline-labels"></div>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-dot" style="background: var(--productive)"></div>Productive</div>
+                    <div class="legend-item"><div class="legend-dot" style="background: var(--neutral)"></div>Neutral</div>
+                    <div class="legend-item"><div class="legend-dot" style="background: var(--distracting)"></div>Distracting</div>
+                    <div class="legend-item"><div class="legend-dot" style="background: var(--idle)"></div>Idle</div>
+                </div>
+            </div>
+
+            <!-- Charts grid -->
+            <div class="charts-grid">
+                <div class="card">
+                    <div class="card-title">Productivity Breakdown</div>
+                    <div class="chart-container" style="position: relative; max-height: 280px;">
+                        <canvas id="donut-chart"></canvas>
+                        <div class="donut-center" id="donut-center">
+                            <div class="donut-value" id="donut-value">--</div>
+                            <div class="donut-label">Active</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Top Activities</div>
+                    <div class="chart-container" style="max-height: 280px;">
+                        <canvas id="top-apps-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session list -->
+            <div class="card">
+                <div class="card-title">Session Details</div>
+                <div class="session-list" id="session-list"></div>
+            </div>
+        </div>
+
+        <!-- =================== WEEKLY VIEW =================== -->
+        <div class="view-content" id="weekly-view">
+            <!-- Weekly header with streak -->
+            <div class="weekly-header">
+                <h2 style="font-size: 18px; font-weight: 600;">Week Overview</h2>
+                <div class="streak-badge" id="weekly-streak" style="display: none;">
+                    <span class="streak-fire">&#x1F525;</span>
+                    <span id="weekly-streak-text">0-day streak</span>
+                </div>
+            </div>
+
+            <!-- Weekly stats -->
+            <div class="weekly-stats-grid" id="weekly-stats-grid">
+                <div class="card weekly-stat-card">
+                    <div class="stat-value" id="weekly-total">--</div>
+                    <div class="stat-label">Week Total</div>
+                </div>
+                <div class="card weekly-stat-card">
+                    <div class="stat-value" id="weekly-avg-prod" style="color: var(--productive)">--</div>
+                    <div class="stat-label">Avg Productive %</div>
+                    <div id="weekly-trend" class="trend-indicator flat">--</div>
+                </div>
+                <div class="card weekly-stat-card">
+                    <div class="stat-value" id="weekly-best" style="color: var(--accent)">--</div>
+                    <div class="stat-label">Best Day</div>
+                </div>
+                <div class="card weekly-stat-card">
+                    <div class="stat-value" id="weekly-days-tracked">--</div>
+                    <div class="stat-label">Days Tracked</div>
+                </div>
+            </div>
+
+            <!-- Weekly charts -->
+            <div class="weekly-grid">
+                <div class="card">
+                    <div class="card-title">Productivity Trend (7 Days)</div>
+                    <div class="weekly-chart-container">
+                        <canvas id="trend-chart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Daily Breakdown</div>
+                    <div class="weekly-chart-container">
+                        <canvas id="daily-bars-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily details table -->
+            <div class="card">
+                <div class="card-title">Day-by-Day Summary</div>
+                <div id="weekly-table"></div>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-state" id="empty-state" style="display: none;">
+            <div class="empty-icon">&#x1F4CA;</div>
+            <h3>No Data for This Day</h3>
+            <p>No activity was recorded. Run <code>python src/seed_data.py</code> to generate demo data, or start the capture service with <code>python src/main.py</code>.</p>
+        </div>
+
+        <footer class="footer">
+            ActivityLens &mdash; All data stays local on your machine. Privacy by design.
+        </footer>
+    </div>
+
+    <script>
+    /* =====================================================
+       STATE
+       ===================================================== */
+    let currentDate = new Date();
+    let currentTab = 'daily';
+    let chartInstances = {};
+
+    // Set to today in UTC
+    currentDate = new Date(Date.UTC(
+        currentDate.getUTCFullYear(),
+        currentDate.getUTCMonth(),
+        currentDate.getUTCDate()
+    ));
+
+    /* =====================================================
+       HELPERS
+       ===================================================== */
+    function dateStr(d) {
+        return d.toISOString().slice(0, 10);
+    }
+
+    function formatDuration(seconds) {
+        if (!seconds || seconds < 0) return '0m';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+        return `${m}m`;
+    }
+
+    function formatTime(isoStr) {
+        if (!isoStr) return '--:--';
+        return isoStr.slice(11, 16);
+    }
+
+    function categoryColor(cat) {
+        const colors = {
+            productive: '#34d399',
+            neutral: '#fbbf24',
+            distracting: '#f87171',
+            idle: '#475569',
+        };
+        return colors[cat] || '#8b8fa3';
+    }
+
+    function categoryBg(cat) {
+        const colors = {
+            productive: 'rgba(52, 211, 153, 0.12)',
+            neutral: 'rgba(251, 191, 36, 0.12)',
+            distracting: 'rgba(248, 113, 113, 0.12)',
+            idle: 'rgba(71, 85, 105, 0.12)',
+        };
+        return colors[cat] || 'rgba(255,255,255,0.05)';
+    }
+
+    function showLoading() { document.getElementById('loading').classList.add('active'); }
+    function hideLoading() { document.getElementById('loading').classList.remove('active'); }
+
+    function dayName(dateStr) {
+        const d = new Date(dateStr + 'T12:00:00');
+        return d.toLocaleDateString('en-US', { weekday: 'short' });
+    }
+
+    /* =====================================================
+       API CALLS
+       ===================================================== */
+    async function fetchJSON(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return resp.json();
+    }
+
+    /* =====================================================
+       DATE NAVIGATION
+       ===================================================== */
+    function updateDateDisplay() {
+        const ds = dateStr(currentDate);
+        const display = currentDate.toLocaleDateString('en-US', {
+            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+        });
+        document.getElementById('date-display').textContent = display;
+        document.getElementById('date-input').value = ds;
+
+        // Disable next if it's today
+        const today = new Date();
+        const todayStr = dateStr(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())));
+        document.getElementById('next-day').disabled = ds >= todayStr;
+    }
+
+    document.getElementById('prev-day').addEventListener('click', () => {
+        currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+        updateDateDisplay();
+        loadCurrentView();
+    });
+
+    document.getElementById('next-day').addEventListener('click', () => {
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        updateDateDisplay();
+        loadCurrentView();
+    });
+
+    document.getElementById('date-display').addEventListener('click', () => {
+        const input = document.getElementById('date-input');
+        input.style.display = 'block';
+        input.showPicker();
+    });
+
+    document.getElementById('date-input').addEventListener('change', (e) => {
+        e.target.style.display = 'none';
+        const parts = e.target.value.split('-');
+        currentDate = new Date(Date.UTC(+parts[0], +parts[1] - 1, +parts[2]));
+        updateDateDisplay();
+        loadCurrentView();
+    });
+
+    document.getElementById('date-input').addEventListener('blur', (e) => {
+        e.target.style.display = 'none';
+    });
+
+    /* =====================================================
+       TAB SWITCHING
+       ===================================================== */
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentTab = btn.dataset.tab;
+
+            document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
+            document.getElementById(`${currentTab}-view`).classList.add('active');
+            document.getElementById('empty-state').style.display = 'none';
+
+            loadCurrentView();
+        });
+    });
+
+    /* =====================================================
+       LOAD DATA
+       ===================================================== */
+    async function loadCurrentView() {
+        if (currentTab === 'daily') {
+            await loadDailyView();
+        } else {
+            await loadWeeklyView();
+        }
+    }
+
+    /* =====================================================
+       DAILY VIEW
+       ===================================================== */
+    async function loadDailyView() {
+        showLoading();
+        const ds = dateStr(currentDate);
+
+        try {
+            const [sessionsData, summaryData, appsData, streakData] = await Promise.all([
+                fetchJSON(`/api/sessions/${ds}`),
+                fetchJSON(`/api/summary/${ds}`),
+                fetchJSON(`/api/top-apps/${ds}`),
+                fetchJSON(`/api/streak/${ds}`),
+            ]);
+
+            const sessions = sessionsData.sessions || [];
+
+            if (sessions.length === 0) {
+                showEmptyState();
+                hideLoading();
+                return;
+            }
+
+            document.getElementById('daily-view').style.display = 'block';
+            document.getElementById('empty-state').style.display = 'none';
+
+            renderStats(summaryData, sessions, streakData);
+            renderTimeline(sessions);
+            renderDonutChart(summaryData);
+            renderTopAppsChart(appsData.apps || []);
+            renderSessionList(sessions);
+
+        } catch (err) {
+            console.error('Failed to load daily data:', err);
+            showEmptyState();
+        }
+
+        hideLoading();
+    }
+
+    function showEmptyState() {
+        document.getElementById('daily-view').style.display = currentTab === 'daily' ? 'block' : 'none';
+        document.getElementById('weekly-view').style.display = currentTab === 'weekly' ? 'block' : 'none';
+        document.getElementById('empty-state').style.display = 'block';
+    }
+
+    /* ---- Stats ---- */
+    function renderStats(summary, sessions, streakData) {
+        const byCat = summary.by_category || {};
+        const idleSecs = (byCat.idle || {}).seconds || 0;
+        const totalSecs = summary.total_seconds || 0;
+        const activeSecs = totalSecs - idleSecs;
+        const prodSecs = (byCat.productive || {}).seconds || 0;
+        const prodPct = activeSecs > 0 ? Math.round((prodSecs / activeSecs) * 100) : 0;
+
+        document.getElementById('stat-total').textContent = formatDuration(totalSecs);
+        document.getElementById('stat-productive').textContent = formatDuration(prodSecs);
+        document.getElementById('stat-productive-pct').textContent = `${prodPct}% of active time`;
+        document.getElementById('stat-sessions').textContent = sessions.filter(s => s.process_name !== '[idle]').length;
+        document.getElementById('stat-streak').textContent = streakData.streak || 0;
+    }
+
+    /* ---- Timeline bar ---- */
+    function renderTimeline(sessions) {
+        const bar = document.getElementById('timeline-bar');
+        const labels = document.getElementById('timeline-labels');
+        bar.innerHTML = '';
+        labels.innerHTML = '';
+
+        const active = sessions.filter(s => s.duration_seconds >= 5);
+        if (active.length === 0) return;
+
+        const totalDuration = active.reduce((sum, s) => sum + s.duration_seconds, 0);
+
+        active.forEach(session => {
+            const pct = (session.duration_seconds / totalDuration) * 100;
+            const seg = document.createElement('div');
+            seg.className = `timeline-segment ${session.category || 'neutral'}`;
+            seg.style.width = `${Math.max(pct, 0.3)}%`;
+
+            // Tooltip
+            seg.addEventListener('mouseenter', (e) => {
+                const tooltip = document.getElementById('timeline-tooltip');
+                const appName = session.is_browser && session.page_title
+                    ? `${session.process_name} (${session.page_title})`
+                    : session.process_name;
+                tooltip.innerHTML = `<strong>${appName}</strong><br>` +
+                    `${formatTime(session.start_time)} - ${formatTime(session.end_time)}<br>` +
+                    `${formatDuration(session.duration_seconds)} | ${session.category}`;
+                tooltip.style.display = 'block';
+            });
+
+            seg.addEventListener('mousemove', (e) => {
+                const tooltip = document.getElementById('timeline-tooltip');
+                tooltip.style.left = `${e.clientX + 12}px`;
+                tooltip.style.top = `${e.clientY - 10}px`;
+            });
+
+            seg.addEventListener('mouseleave', () => {
+                document.getElementById('timeline-tooltip').style.display = 'none';
+            });
+
+            bar.appendChild(seg);
+        });
+
+        // Time labels
+        const firstTime = formatTime(active[0].start_time);
+        const lastTime = formatTime(active[active.length - 1].end_time);
+        labels.innerHTML = `<span>${firstTime}</span><span>${lastTime}</span>`;
+    }
+
+    /* ---- Donut chart ---- */
+    function renderDonutChart(summary) {
+        const ctx = document.getElementById('donut-chart');
+        const byCat = summary.by_category || {};
+
+        const prodSecs = (byCat.productive || {}).seconds || 0;
+        const neutralSecs = (byCat.neutral || {}).seconds || 0;
+        const distractSecs = (byCat.distracting || {}).seconds || 0;
+        const idleSecs = (byCat.idle || {}).seconds || 0;
+        const activeSecs = prodSecs + neutralSecs + distractSecs;
+
+        document.getElementById('donut-value').textContent = formatDuration(activeSecs);
+
+        if (chartInstances.donut) chartInstances.donut.destroy();
+
+        chartInstances.donut = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Productive', 'Neutral', 'Distracting'],
+                datasets: [{
+                    data: [prodSecs, neutralSecs, distractSecs],
+                    backgroundColor: ['#34d399', '#fbbf24', '#f87171'],
+                    borderColor: 'transparent',
+                    borderWidth: 0,
+                    hoverOffset: 6,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                cutout: '72%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a1d2e',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        titleColor: '#e8eaf0',
+                        bodyColor: '#8b8fa3',
+                        padding: 10,
+                        callbacks: {
+                            label: (ctx) => `${ctx.label}: ${formatDuration(ctx.raw)}`,
+                        },
+                    },
+                },
+                animation: {
+                    animateRotate: true,
+                    duration: 800,
+                },
+            },
+        });
+    }
+
+    /* ---- Top apps bar chart ---- */
+    function renderTopAppsChart(apps) {
+        const ctx = document.getElementById('top-apps-chart');
+        const top = apps.slice(0, 8);
+
+        // Truncate long names
+        const labels = top.map(a => a.name.length > 25 ? a.name.slice(0, 22) + '...' : a.name);
+        const data = top.map(a => a.seconds / 60); // convert to minutes
+        const colors = top.map(a => categoryColor(a.category));
+
+        if (chartInstances.topApps) chartInstances.topApps.destroy();
+
+        chartInstances.topApps = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors.map(c => c + '33'),
+                    borderColor: colors,
+                    borderWidth: 1.5,
+                    borderRadius: 4,
+                    barPercentage: 0.7,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a1d2e',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: (ctx) => `${Math.round(ctx.raw)} min`,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        ticks: { color: '#5c5f73', font: { size: 11 } },
+                        title: { display: true, text: 'Minutes', color: '#5c5f73', font: { size: 11 } },
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#8b8fa3', font: { size: 11 } },
+                    },
+                },
+                animation: { duration: 600 },
+            },
+        });
+    }
+
+    /* ---- Session list ---- */
+    function renderSessionList(sessions) {
+        const list = document.getElementById('session-list');
+        const active = sessions.filter(s => s.process_name !== '[idle]' && s.duration_seconds >= 10);
+
+        if (active.length === 0) {
+            list.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);">No significant sessions</div>';
+            return;
+        }
+
+        list.innerHTML = active.map(s => {
+            const detail = s.is_browser && s.page_title ? s.page_title : (s.window_title || '');
+            const truncDetail = detail.length > 40 ? detail.slice(0, 37) + '...' : detail;
+
+            return `<div class="session-item">
+                <span class="session-time">${formatTime(s.start_time)} - ${formatTime(s.end_time)}</span>
+                <div class="session-app">
+                    <span class="session-app-name">${s.process_name}</span>
+                    <span class="session-app-detail">${truncDetail}</span>
+                </div>
+                <span class="session-duration">${formatDuration(s.duration_seconds)}</span>
+                <span class="category-badge ${s.category}">${s.category}</span>
+            </div>`;
+        }).join('');
+    }
+
+    /* =====================================================
+       WEEKLY VIEW
+       ===================================================== */
+    async function loadWeeklyView() {
+        showLoading();
+        const ds = dateStr(currentDate);
+
+        try {
+            const [weeklyData, streakData] = await Promise.all([
+                fetchJSON(`/api/weekly/${ds}`),
+                fetchJSON(`/api/streak/${ds}`),
+            ]);
+
+            const days = weeklyData.days || [];
+
+            if (days.every(d => d.total_seconds === 0)) {
+                showEmptyState();
+                hideLoading();
+                return;
+            }
+
+            document.getElementById('weekly-view').style.display = 'block';
+            document.getElementById('empty-state').style.display = 'none';
+
+            renderWeeklyStreak(streakData);
+            renderWeeklyStats(days);
+            renderTrendChart(days);
+            renderDailyBarsChart(days);
+            renderWeeklyTable(days);
+
+        } catch (err) {
+            console.error('Failed to load weekly data:', err);
+            showEmptyState();
+        }
+
+        hideLoading();
+    }
+
+    /* ---- Streak badge ---- */
+    function renderWeeklyStreak(streakData) {
+        const badge = document.getElementById('weekly-streak');
+        const streak = streakData.streak || 0;
+
+        if (streak > 0) {
+            badge.style.display = 'flex';
+            document.getElementById('weekly-streak-text').textContent = `${streak}-day streak!`;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    /* ---- Weekly stats ---- */
+    function renderWeeklyStats(days) {
+        const activeDays = days.filter(d => d.total_seconds > 0);
+        const totalSecs = days.reduce((sum, d) => sum + d.total_seconds, 0);
+
+        // Average productive %
+        let prodPcts = [];
+        activeDays.forEach(d => {
+            const byCat = d.by_category || {};
+            const idleSecs = (byCat.idle || {}).seconds || 0;
+            const activeSecs = d.total_seconds - idleSecs;
+            const prodSecs = (byCat.productive || {}).seconds || 0;
+            if (activeSecs > 0) prodPcts.push((prodSecs / activeSecs) * 100);
+        });
+
+        const avgProd = prodPcts.length > 0
+            ? Math.round(prodPcts.reduce((a, b) => a + b, 0) / prodPcts.length)
+            : 0;
+
+        // Best day
+        let bestDay = '--';
+        let bestProd = 0;
+        activeDays.forEach(d => {
+            const byCat = d.by_category || {};
+            const prodSecs = (byCat.productive || {}).seconds || 0;
+            if (prodSecs > bestProd) {
+                bestProd = prodSecs;
+                bestDay = dayName(d.date);
+            }
+        });
+
+        // Week-over-week trend (compare first half vs second half of the week)
+        const firstHalf = prodPcts.slice(0, Math.ceil(prodPcts.length / 2));
+        const secondHalf = prodPcts.slice(Math.ceil(prodPcts.length / 2));
+        const firstAvg = firstHalf.length > 0 ? firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length : 0;
+        const secondAvg = secondHalf.length > 0 ? secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length : 0;
+        const trend = secondAvg - firstAvg;
+
+        document.getElementById('weekly-total').textContent = formatDuration(totalSecs);
+        document.getElementById('weekly-avg-prod').textContent = `${avgProd}%`;
+        document.getElementById('weekly-best').textContent = bestDay;
+        document.getElementById('weekly-days-tracked').textContent = activeDays.length;
+
+        const trendEl = document.getElementById('weekly-trend');
+        if (Math.abs(trend) < 3) {
+            trendEl.className = 'trend-indicator flat';
+            trendEl.textContent = 'Steady';
+        } else if (trend > 0) {
+            trendEl.className = 'trend-indicator up';
+            trendEl.innerHTML = `&#x25B2; +${Math.round(trend)}%`;
+        } else {
+            trendEl.className = 'trend-indicator down';
+            trendEl.innerHTML = `&#x25BC; ${Math.round(trend)}%`;
+        }
+    }
+
+    /* ---- Trend line chart ---- */
+    function renderTrendChart(days) {
+        const ctx = document.getElementById('trend-chart');
+        const labels = days.map(d => dayName(d.date));
+
+        const prodPcts = days.map(d => {
+            const byCat = d.by_category || {};
+            const idleSecs = (byCat.idle || {}).seconds || 0;
+            const activeSecs = d.total_seconds - idleSecs;
+            const prodSecs = (byCat.productive || {}).seconds || 0;
+            return activeSecs > 0 ? Math.round((prodSecs / activeSecs) * 100) : 0;
+        });
+
+        if (chartInstances.trend) chartInstances.trend.destroy();
+
+        chartInstances.trend = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Productive %',
+                    data: prodPcts,
+                    borderColor: '#34d399',
+                    backgroundColor: (context) => {
+                        const chart = context.chart;
+                        const { ctx: c, chartArea } = chart;
+                        if (!chartArea) return 'transparent';
+                        const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                        gradient.addColorStop(0, 'rgba(52, 211, 153, 0.25)');
+                        gradient.addColorStop(1, 'rgba(52, 211, 153, 0.01)');
+                        return gradient;
+                    },
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2.5,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#34d399',
+                    pointBorderColor: '#0f1117',
+                    pointBorderWidth: 2,
+                    pointHoverRadius: 7,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a1d2e',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: (ctx) => `${ctx.raw}% productive`,
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 100,
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        ticks: {
+                            color: '#5c5f73',
+                            font: { size: 11 },
+                            callback: v => v + '%',
+                        },
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#8b8fa3', font: { size: 12 } },
+                    },
+                },
+                animation: { duration: 800 },
+            },
+        });
+    }
+
+    /* ---- Daily comparison bars ---- */
+    function renderDailyBarsChart(days) {
+        const ctx = document.getElementById('daily-bars-chart');
+        const labels = days.map(d => dayName(d.date));
+
+        const prodData = days.map(d => ((d.by_category?.productive || {}).seconds || 0) / 3600);
+        const neutralData = days.map(d => ((d.by_category?.neutral || {}).seconds || 0) / 3600);
+        const distractData = days.map(d => ((d.by_category?.distracting || {}).seconds || 0) / 3600);
+
+        if (chartInstances.dailyBars) chartInstances.dailyBars.destroy();
+
+        chartInstances.dailyBars = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Productive',
+                        data: prodData,
+                        backgroundColor: '#34d39966',
+                        borderColor: '#34d399',
+                        borderWidth: 1,
+                        borderRadius: 3,
+                    },
+                    {
+                        label: 'Neutral',
+                        data: neutralData,
+                        backgroundColor: '#fbbf2466',
+                        borderColor: '#fbbf24',
+                        borderWidth: 1,
+                        borderRadius: 3,
+                    },
+                    {
+                        label: 'Distracting',
+                        data: distractData,
+                        backgroundColor: '#f8717166',
+                        borderColor: '#f87171',
+                        borderWidth: 1,
+                        borderRadius: 3,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            color: '#8b8fa3',
+                            font: { size: 11 },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            padding: 16,
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: '#1a1d2e',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}h`,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        grid: { display: false },
+                        ticks: { color: '#8b8fa3', font: { size: 12 } },
+                    },
+                    y: {
+                        stacked: true,
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        ticks: {
+                            color: '#5c5f73',
+                            font: { size: 11 },
+                            callback: v => v + 'h',
+                        },
+                        title: { display: true, text: 'Hours', color: '#5c5f73', font: { size: 11 } },
+                    },
+                },
+                animation: { duration: 600 },
+            },
+        });
+    }
+
+    /* ---- Weekly table ---- */
+    function renderWeeklyTable(days) {
+        const container = document.getElementById('weekly-table');
+
+        const rows = days.map(d => {
+            const byCat = d.by_category || {};
+            const idleSecs = (byCat.idle || {}).seconds || 0;
+            const activeSecs = d.total_seconds - idleSecs;
+            const prodSecs = (byCat.productive || {}).seconds || 0;
+            const prodPct = activeSecs > 0 ? Math.round((prodSecs / activeSecs) * 100) : 0;
+
+            if (d.total_seconds === 0) {
+                return `<div class="session-item" style="opacity: 0.4;">
+                    <span class="session-time">${d.date}</span>
+                    <div class="session-app"><span class="session-app-name">${dayName(d.date)}</span>
+                    <span class="session-app-detail">No data</span></div>
+                    <span class="session-duration">--</span>
+                    <span class="category-badge idle">--</span>
+                </div>`;
+            }
+
+            const barWidth = Math.min(prodPct, 100);
+            return `<div class="session-item">
+                <span class="session-time">${d.date}</span>
+                <div class="session-app">
+                    <span class="session-app-name">${dayName(d.date)}</span>
+                    <span class="session-app-detail">
+                        <span style="display:inline-block;width:${barWidth}%;max-width:120px;height:4px;background:${categoryColor('productive')};border-radius:2px;margin-right:6px;vertical-align:middle;"></span>
+                        ${prodPct}% productive
+                    </span>
+                </div>
+                <span class="session-duration">${formatDuration(d.total_seconds)}</span>
+                <span class="category-badge ${prodPct >= 50 ? 'productive' : prodPct >= 30 ? 'neutral' : 'distracting'}">${prodPct}%</span>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = rows;
+    }
+
+    /* =====================================================
+       INIT
+       ===================================================== */
+    updateDateDisplay();
+    loadCurrentView();
+    </script>
+</body>
+</html>

@@ -1,5 +1,6 @@
-# ActivityLens – Day 1 + Day 2 Dependencies
+# ActivityLens - Day 1 + Day 2 + Day 3 + Day 4 Dependencies
 pywin32>=306
 psutil>=5.9
 pyyaml>=6.0
 pytest>=7.0
+flask>=3.0

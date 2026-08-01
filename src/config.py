@@ -44,6 +44,10 @@ DEFAULTS = {
             "browser_titles": [],
         },
     },
+    "dashboard": {
+        "host": "127.0.0.1",
+        "port": 5000,
+    },
     "storage": {
         "db_path": "data/activity.db",
     },
@@ -146,6 +150,14 @@ class Config:
                 "browser_titles": [p.lower() for p in raw["distracting"]["browser_titles"]],
             },
         }
+
+    @property
+    def dashboard_host(self) -> str:
+        return self._data["dashboard"]["host"]
+
+    @property
+    def dashboard_port(self) -> int:
+        return self._data["dashboard"]["port"]
 
     @property
     def db_path(self) -> Path:

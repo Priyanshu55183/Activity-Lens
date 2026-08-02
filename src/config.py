@@ -48,6 +48,21 @@ DEFAULTS = {
         "host": "127.0.0.1",
         "port": 5000,
     },
+    "handoff": {
+        "ignore_dirs": [
+            "node_modules", ".git", "__pycache__", "venv", ".venv",
+            "dist", "build", ".next", ".pytest_cache", ".mypy_cache",
+            ".tox", "egg-info",
+        ],
+        "ignore_extensions": [
+            ".pyc", ".pyo", ".exe", ".dll", ".so", ".o", ".a",
+            ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg",
+            ".woff", ".woff2", ".ttf", ".eot", ".lock", ".map",
+            ".min.js", ".min.css",
+        ],
+        "max_file_lines": 300,
+        "max_files": 15,
+    },
     "storage": {
         "db_path": "data/activity.db",
     },
@@ -158,6 +173,11 @@ class Config:
     @property
     def dashboard_port(self) -> int:
         return self._data["dashboard"]["port"]
+
+    @property
+    def handoff_config(self) -> dict:
+        """Return handoff configuration for the prompt generator."""
+        return self._data["handoff"]
 
     @property
     def db_path(self) -> Path:

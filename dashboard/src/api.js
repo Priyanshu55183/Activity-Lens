@@ -39,3 +39,15 @@ export function dayName(dateString) {
   const d = new Date(dateString + 'T12:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short' });
 }
+
+export async function fetchBrowsingHistory(dateStr) {
+  return fetchJSON(`/api/history/${dateStr}`);
+}
+
+export async function fetchRecentSites() {
+  return fetchJSON('/api/recent-sites');
+}
+
+export async function fetchSessionDetail(sessionId) {
+  return fetchJSON(`/api/session/${sessionId}`);
+}

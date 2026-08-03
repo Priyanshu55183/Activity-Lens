@@ -1,6 +1,6 @@
 import { formatDuration, formatTime } from '../api'
 
-export default function SessionList({ sessions }) {
+export default function SessionList({ sessions, onSessionClick }) {
   const active = sessions.filter(s => s.process_name !== '[idle]' && s.duration_seconds >= 10)
 
   if (active.length === 0) {
@@ -20,7 +20,12 @@ export default function SessionList({ sessions }) {
         const truncDetail = detail.length > 40 ? detail.slice(0, 37) + '...' : detail
 
         return (
-          <div className="session-item" key={i}>
+          <div
+            className="session-item clickable"
+            key={i}
+            onClick={() => onSessionClick && onSessionClick(s)}
+            title="Click for details"
+          >
             <span className="session-time">
               {formatTime(s.start_time)} - {formatTime(s.end_time)}
             </span>

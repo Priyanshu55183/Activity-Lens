@@ -3,6 +3,7 @@ import './App.css'
 import Header from './components/Header'
 import DailyView from './components/DailyView'
 import WeeklyView from './components/WeeklyView'
+import BrowsingHistory from './components/BrowsingHistory'
 import EmptyState from './components/EmptyState'
 import { dateStr } from './api'
 
@@ -69,6 +70,14 @@ function App() {
 
       {currentTab === 'weekly' && (
         <WeeklyView
+          dateStr={ds}
+          onEmpty={setIsEmpty}
+          onLoading={setLoading}
+        />
+      )}
+
+      {currentTab === 'history' && (
+        <BrowsingHistory
           dateStr={ds}
           onEmpty={setIsEmpty}
           onLoading={setLoading}

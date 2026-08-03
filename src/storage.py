@@ -76,6 +76,28 @@ CREATE INDEX IF NOT EXISTS idx_sessions_start_time
 ON sessions(start_time);
 """
 
+# --- Browsing history table (aggregated browser visits) ---
+
+_CREATE_BROWSING_HISTORY_SQL = """
+CREATE TABLE IF NOT EXISTS browsing_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    date            TEXT    NOT NULL,
+    page_title      TEXT    NOT NULL,
+    process_name    TEXT    NOT NULL,
+    first_seen      TEXT    NOT NULL,
+    last_seen       TEXT    NOT NULL,
+    total_seconds   REAL    DEFAULT 0,
+    visit_count     INTEGER DEFAULT 1,
+    category        TEXT    DEFAULT 'neutral',
+    created_at      TEXT    DEFAULT (datetime('now'))
+);
+"""
+
+_CREATE_BROWSING_HISTORY_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_browsing_history_date
+ON browsing_history(date);
+"""
+
 
 # ---------------------------------------------------------------------------
 # Database Initialization
@@ -107,6 +129,8 @@ def init_db(db_path: str | Path) -> sqlite3.Connection:
     conn.execute(_CREATE_INDEX_SQL)
     conn.execute(_CREATE_SESSIONS_TABLE_SQL)
     conn.execute(_CREATE_SESSIONS_INDEX_SQL)
+    conn.execute(_CREATE_BROWSING_HISTORY_SQL)
+    conn.execute(_CREATE_BROWSING_HISTORY_INDEX_SQL)
     conn.commit()
 
     return conn
@@ -417,3 +441,167 @@ def get_date_range_sessions(
     ]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+
+# ---------------------------------------------------------------------------
+# Browsing History — Aggregated browser visits
+# ---------------------------------------------------------------------------
+
+def insert_browsing_history(
+    conn: sqlite3.Connection,
+    sessions: list[dict],
+    date_str: str,
+) -> int:
+    """
+    Aggregate browser sessions into browsing_history records for a date.
+    
+    For each unique (date, page_title) combination, we upsert:
+    - Accumulate total_seconds
+    - Track first_seen / last_seen
+    - Count visits
+    
+    Returns the number of rows upserted.
+    """
+    # Clear existing history for this date (idempotent)
+    conn.execute(
+        "DELETE FROM browsing_history WHERE date = ?",
+        (date_str,),
+    )
+
+    # Aggregate browser sessions by page_title
+    aggregated = {}
+    for s in sessions:
+        if not s.get("is_browser") or not s.get("page_title"):
+            continue
+
+        title = s["page_title"]
+        if title not in aggregated:
+            aggregated[title] = {
+                "page_title": title,
+                "process_name": s["process_name"],
+                "first_seen": s["start_time"],
+                "last_seen": s["end_time"],
+                "total_seconds": 0.0,
+                "visit_count": 0,
+                "category": s.get("category", "neutral"),
+            }
+
+        rec = aggregated[title]
+        rec["total_seconds"] += s.get("duration_seconds", 0)
+        rec["visit_count"] += 1
+        # Track earliest first_seen and latest last_seen
+        if s["start_time"] < rec["first_seen"]:
+            rec["first_seen"] = s["start_time"]
+        if s["end_time"] > rec["last_seen"]:
+            rec["last_seen"] = s["end_time"]
+
+    if not aggregated:
+        return 0
+
+    rows = list(aggregated.values())
+    conn.executemany(
+        """
+        INSERT INTO browsing_history
+            (date, page_title, process_name, first_seen, last_seen,
+             total_seconds, visit_count, category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                date_str,
+                r["page_title"],
+                r["process_name"],
+                r["first_seen"],
+                r["last_seen"],
+                r["total_seconds"],
+                r["visit_count"],
+                r["category"],
+            )
+            for r in rows
+        ],
+    )
+    conn.commit()
+    return len(rows)
+
+
+def get_browsing_history_for_date(
+    conn: sqlite3.Connection,
+    date_str: str,
+) -> list[dict]:
+    """
+    Get all browsing history entries for a date, sorted by total time spent.
+    """
+    cursor = conn.execute(
+        """
+        SELECT id, date, page_title, process_name, first_seen, last_seen,
+               total_seconds, visit_count, category
+        FROM browsing_history
+        WHERE date = ?
+        ORDER BY total_seconds DESC
+        """,
+        (date_str,),
+    )
+
+    columns = [
+        "id", "date", "page_title", "process_name", "first_seen", "last_seen",
+        "total_seconds", "visit_count", "category",
+    ]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def get_recent_sites(
+    conn: sqlite3.Connection,
+    days: int = 7,
+) -> list[dict]:
+    """
+    Get the most recent browsing activity across the last N days.
+    
+    Returns sites ordered by last_seen (most recent first), limited to 20.
+    Used for the "Continue Where You Left Off" feature.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    cursor = conn.execute(
+        """
+        SELECT id, date, page_title, process_name, first_seen, last_seen,
+               total_seconds, visit_count, category
+        FROM browsing_history
+        WHERE date >= ?
+        ORDER BY last_seen DESC
+        LIMIT 20
+        """,
+        (cutoff,),
+    )
+
+    columns = [
+        "id", "date", "page_title", "process_name", "first_seen", "last_seen",
+        "total_seconds", "visit_count", "category",
+    ]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def get_session_by_id(
+    conn: sqlite3.Connection,
+    session_id: int,
+) -> dict | None:
+    """
+    Fetch a single session by ID. Returns None if not found.
+    """
+    cursor = conn.execute(
+        """
+        SELECT id, start_time, end_time, duration_seconds, process_name,
+               window_title, is_browser, page_title, snapshot_count, category
+        FROM sessions
+        WHERE id = ?
+        """,
+        (session_id,),
+    )
+
+    row = cursor.fetchone()
+    if row is None:
+        return None
+
+    columns = [
+        "id", "start_time", "end_time", "duration_seconds", "process_name",
+        "window_title", "is_browser", "page_title", "snapshot_count", "category",
+    ]
+    return dict(zip(columns, row))

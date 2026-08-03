@@ -29,8 +29,12 @@ from storage import (
     get_sessions_for_date,
     get_daily_summary,
     get_weekly_summary,
+    get_browsing_history_for_date,
+    get_recent_sites,
+    get_session_by_id,
 )
 from pipeline import run_pipeline
+from handoff import scan_file_tree, detect_key_files, get_git_context, generate_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +222,97 @@ def api_streak(date_str):
         })
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# API: Browsing History & Session Detail
+# ---------------------------------------------------------------------------
+
+@app.route("/api/history/<date_str>")
+def api_history(date_str):
+    """Return browsing history for a given date."""
+    try:
+        date_type.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({"error": "Invalid date format."}), 400
+
+    conn = get_conn()
+    try:
+        # Ensure pipeline has run for this date
+        run_pipeline(conn, config, date_str=date_str)
+        history = get_browsing_history_for_date(conn, date_str)
+        return jsonify({"date": date_str, "sites": history})
+    finally:
+        conn.close()
+
+
+@app.route("/api/recent-sites")
+def api_recent_sites():
+    """Return recent browsing activity for 'Continue Where You Left Off'."""
+    conn = get_conn()
+    try:
+        sites = get_recent_sites(conn, days=7)
+        return jsonify({"sites": sites})
+    finally:
+        conn.close()
+
+
+@app.route("/api/session/<int:session_id>")
+def api_session_detail(session_id):
+    """Return detailed info for a single session."""
+    conn = get_conn()
+    try:
+        session = get_session_by_id(conn, session_id)
+        if session is None:
+            return jsonify({"error": "Session not found."}), 404
+        return jsonify({"session": session})
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# API: Handoff prompt generator
+# ---------------------------------------------------------------------------
+
+@app.route("/api/handoff")
+def api_handoff():
+    """
+    Generate a handoff prompt for a project directory.
+
+    Query params:
+        path  – absolute path to scan (defaults to Activity-Lens project root)
+    """
+    from flask import request
+
+    project_path = request.args.get("path")
+    if project_path:
+        project_path = Path(project_path).resolve()
+    else:
+        project_path = Path(__file__).resolve().parent.parent
+
+    if not project_path.exists() or not project_path.is_dir():
+        return jsonify({"error": f"Not a valid directory: {project_path}"}), 400
+
+    hcfg = config.handoff_config
+    ignore_dirs = hcfg["ignore_dirs"]
+    ignore_exts = hcfg["ignore_extensions"]
+    max_lines = hcfg["max_file_lines"]
+    max_files = hcfg["max_files"]
+
+    tree = scan_file_tree(project_path, ignore_dirs, ignore_exts)
+    key_files = detect_key_files(project_path, ignore_dirs, ignore_exts, max_files)
+    git_ctx = get_git_context(project_path)
+    prompt = generate_prompt(project_path, tree, key_files, git_ctx, max_lines)
+
+    return jsonify({
+        "project": project_path.name,
+        "prompt": prompt,
+        "stats": {
+            "lines": prompt.count("\n") + 1,
+            "characters": len(prompt),
+            "key_files": len(key_files),
+        },
+    })
 
 
 # ---------------------------------------------------------------------------

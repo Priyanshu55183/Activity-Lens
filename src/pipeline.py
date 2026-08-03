@@ -26,6 +26,7 @@ from storage import (
     get_snapshots_for_date,
     insert_sessions,
     get_sessions_for_date,
+    insert_browsing_history,
 )
 from sessionizer import sessionize
 from classifier import classify_sessions
@@ -97,6 +98,9 @@ def run_pipeline(
         conn.commit()
 
     insert_sessions(conn, classified)
+
+    # Step 5: Populate browsing history (aggregated browser visits)
+    insert_browsing_history(conn, classified, date_str)
 
     return classified
 

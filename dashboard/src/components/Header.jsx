@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { dateStr } from '../api'
+import HandoffButton from './HandoffButton'
 
 export default function Header({ currentDate, currentTab, isToday, onPrevDay, onNextDay, onDatePick, onTabChange }) {
   const dateInputRef = useRef(null)
@@ -48,7 +49,15 @@ export default function Header({ currentDate, currentTab, isToday, onPrevDay, on
           >
             Weekly
           </button>
+          <button
+            className={`tab-btn ${currentTab === 'history' ? 'active' : ''}`}
+            onClick={() => onTabChange('history')}
+          >
+            History
+          </button>
         </div>
+
+        <HandoffButton />
       </div>
     </header>
   )

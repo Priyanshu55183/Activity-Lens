@@ -5,6 +5,8 @@ import TimelineBar from './TimelineBar'
 import DonutChart from './DonutChart'
 import TopAppsChart from './TopAppsChart'
 import SessionList from './SessionList'
+import ContinuePanel from './ContinuePanel'
+import SessionDetailModal from './SessionDetailModal'
 
 export default function DailyView({ dateStr, onEmpty, onLoading }) {
   const [sessions, setSessions] = useState([])
@@ -12,6 +14,7 @@ export default function DailyView({ dateStr, onEmpty, onLoading }) {
   const [apps, setApps] = useState([])
   const [streak, setStreak] = useState(0)
   const [loaded, setLoaded] = useState(false)
+  const [selectedSession, setSelectedSession] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -47,6 +50,7 @@ export default function DailyView({ dateStr, onEmpty, onLoading }) {
 
   return (
     <div className="view-content">
+      <ContinuePanel />
       <StatsGrid summary={summary} sessions={sessions} streak={streak} />
       <TimelineBar sessions={sessions} />
       <div className="charts-grid">
@@ -61,8 +65,15 @@ export default function DailyView({ dateStr, onEmpty, onLoading }) {
       </div>
       <div className="card">
         <div className="card-title">Session Details</div>
-        <SessionList sessions={sessions} />
+        <SessionList sessions={sessions} onSessionClick={setSelectedSession} />
       </div>
+
+      {selectedSession && (
+        <SessionDetailModal
+          session={selectedSession}
+          onClose={() => setSelectedSession(null)}
+        />
+      )}
     </div>
   )
 }
